@@ -1,5 +1,8 @@
 .vscode
---pycache__/
+--__pycache__/
 .env/
 venv/
 .pyc
+.pyo
+.DS_Store
+.idea/
