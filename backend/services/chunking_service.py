@@ -1,7 +1,7 @@
 def chunk_text(
     text,
-    chunk_size=500,
-    overlap=50
+    chunk_size=150,
+    overlap=40
 ):
     words = text.split()
 

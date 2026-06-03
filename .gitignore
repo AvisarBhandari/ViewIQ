@@ -6,3 +6,4 @@ venv/
 .pyo
 .DS_Store
 .idea/
+*data/
