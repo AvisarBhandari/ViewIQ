@@ -7,3 +7,8 @@ venv/
 .DS_Store
 .idea/
 *data/
+*.env
+*.next
+*node_modules/
+*public/
+
