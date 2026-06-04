@@ -10,5 +10,5 @@ venv/
 *.env
 *.next
 *node_modules/
-*public/
+# *public/
 
