@@ -11,10 +11,14 @@ from services.rag_service import rag_chat_stream
 import json
 
 app = FastAPI()
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# Debugging: Check your terminal logs when the server starts!
+print(f"--- DEBUG: CORS allowed origin is set to: '{frontend_url}' ---")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL")],
+    allow_origins=[frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

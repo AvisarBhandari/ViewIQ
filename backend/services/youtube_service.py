@@ -7,8 +7,7 @@ from youtube_transcript_api import (
 )
 
 
-def get_video_id(url: str):
-    # Matches standard, share, and short links
+def get_video_id(url: str) -> str:
     match = re.search(
         r"(?:v=|\/v\/|embed\/|youtu\.be\/|\/shorts\/|^)([a-zA-Z0-9_-]{11})", url
     )
@@ -21,34 +20,24 @@ def get_transcript(url: str):
     try:
         video_id = get_video_id(url)
     except ValueError as e:
-        return {"error": str(e)}
+        raise ValueError(str(e))
 
     try:
-        # Initialize the modern API client instance
         api = YouTubeTranscriptApi()
-
-        # Use .list() instead of the deprecated static method
         transcript_list = api.list(video_id)
 
-        # Try manually created English transcripts first
         try:
             transcript = transcript_list.find_transcript(["en"])
         except Exception:
-            # Fallback: auto-generated English captions
             transcript = transcript_list.find_generated_transcript(["en"])
 
         return transcript.fetch()
 
     except TranscriptsDisabled:
-        return {"error": "Transcripts are disabled for this video"}
-
+        raise RuntimeError("Transcripts are disabled for this video")
     except NoTranscriptFound:
-        return {"error": "No transcript available for this video"}
-
+        raise RuntimeError("No transcript available for this video")
     except ET.ParseError:
-        return {
-            "error": "YouTube blocked this request (XML Parse Error). Try using cookies or a proxy."
-        }
-
+        raise RuntimeError("YouTube blocked this request. Try again later.")
     except Exception as e:
-        return {"error": f"Unexpected error: {str(e)}"}
+        raise RuntimeError(f"Transcript error: {str(e)}")
