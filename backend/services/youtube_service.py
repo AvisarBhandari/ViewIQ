@@ -1,4 +1,5 @@
 import re
+from weakref import proxy
 import xml.etree.ElementTree as ET
 from youtube_transcript_api import (
     YouTubeTranscriptApi,
@@ -17,6 +18,15 @@ def get_video_id(url: str) -> str:
 
 
 def get_transcript(url: str):
+    # If the HTTP proxy worked
+    proxies = {
+        "http": "http://203.19.38.114:1080",
+        "https": "http://203.19.38.114:1080",
+    }
+
+    # If the HTTPS proxy worked
+    proxies = {"http": "http://3.29.67.17:4480", "https": "https://3.29.67.17:4480"}
+
     try:
         video_id = get_video_id(url)
     except ValueError as e:
@@ -24,7 +34,7 @@ def get_transcript(url: str):
 
     try:
         api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
+        transcript_list = api.list(video_id, proxies=proxies)
 
         try:
             transcript = transcript_list.find_transcript(["en"])
