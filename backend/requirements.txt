@@ -25,7 +25,6 @@ huggingface_hub
 onnxruntime
 
 youtube-transcript-api
-yt-dlp
 
 tqdm
 PyYAML
