@@ -1,5 +1,4 @@
 import re
-from weakref import proxy
 import xml.etree.ElementTree as ET
 from youtube_transcript_api import (
     YouTubeTranscriptApi,
@@ -8,46 +7,61 @@ from youtube_transcript_api import (
 )
 
 
+# Extract YouTube Video ID
 def get_video_id(url: str) -> str:
     match = re.search(
-        r"(?:v=|\/v\/|embed\/|youtu\.be\/|\/shorts\/|^)([a-zA-Z0-9_-]{11})", url
+        r"(?:v=|\/v\/|embed\/|youtu\.be\/|\/shorts\/|^)([a-zA-Z0-9_-]{11})",
+        url,
     )
+
     if not match:
         raise ValueError("Invalid YouTube URL")
+
     return match.group(1)
 
 
+# Fetch Transcript Safely
 def get_transcript(url: str):
-    # If the HTTP proxy worked
-    proxies = {
-        "http": "http://203.19.38.114:1080",
-        "https": "http://203.19.38.114:1080",
-    }
-
-    # If the HTTPS proxy worked
-    proxies = {"http": "http://3.29.67.17:4480", "https": "https://3.29.67.17:4480"}
+    """
+    Returns:
+        List of transcript segments OR None if unavailable
+    """
 
     try:
         video_id = get_video_id(url)
-    except ValueError as e:
-        raise ValueError(str(e))
 
-    try:
         api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id, proxies=proxies)
+        transcript_list = api.list(video_id)
 
         try:
             transcript = transcript_list.find_transcript(["en"])
         except Exception:
+            # fallback to auto-generated captions
             transcript = transcript_list.find_generated_transcript(["en"])
 
         return transcript.fetch()
 
+    # Known transcript issues
     except TranscriptsDisabled:
-        raise RuntimeError("Transcripts are disabled for this video")
+        print("Transcript disabled for video:", url)
+        return None
+
     except NoTranscriptFound:
-        raise RuntimeError("No transcript available for this video")
+        print("No transcript found for video:", url)
+        return None
+
+    # YouTube / IP blocking issues
     except ET.ParseError:
-        raise RuntimeError("YouTube blocked this request. Try again later.")
+        print("YouTube blocked or returned invalid XML:", url)
+        return None
+
+    # Newer API / request blocking errors
     except Exception as e:
-        raise RuntimeError(f"Transcript error: {str(e)}")
+        msg = str(e).lower()
+
+        if "blocked" in msg or "ip" in msg:
+            print("YouTube blocked this request (IP restriction)")
+            return None
+
+        print("Unexpected transcript error:", str(e))
+        return None

@@ -9,6 +9,8 @@ from services.vectorstore_service import store_chunks
 def ingest_video(url: str, video_id: str):
     metadata = get_metadata(url)
     raw_transcript = get_transcript(url)
+    if not raw_transcript:
+        raw_transcript = []
     transcript = clean_transcript(raw_transcript)
     chunks = chunk_text(transcript)
 
