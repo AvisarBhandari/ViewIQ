@@ -5,4 +5,3 @@ pydantic
 python-dotenv
 Requests
 youtube_transcript_api
-python
