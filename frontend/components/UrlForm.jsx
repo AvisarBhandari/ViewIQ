@@ -1,6 +1,11 @@
 "use client";
 import { useState } from "react";
 import api from "@/lib/api";
+import {
+  getTranscript,
+  getMetadata,
+  getVideoId,
+} from "@/lib/youtube";
 
 export default function UrlForm({ onSuccess }) {
   const [urlA, setUrlA] = useState("");
@@ -9,21 +14,33 @@ export default function UrlForm({ onSuccess }) {
   const [error, setError] = useState(null);
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    if (!urlA.trim() || !urlB.trim()) {
-      setError("Please enter both video URLs.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.post("/ingest", { url_a: urlA, url_b: urlB });
-      onSuccess(res.data.data); // expects { videoA: {...}, videoB: {...} }
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to analyze videos.");
-    } finally {
-      setLoading(false);
-    }
+    const idA = getVideoId(urlA);
+const idB = getVideoId(urlB);
+
+const [
+  transcriptA,
+  transcriptB,
+  metadataA,
+  metadataB,
+] = await Promise.all([
+  getTranscript(idA),
+  getTranscript(idB),
+  getMetadata(idA),
+  getMetadata(idB),
+]);
+
+const res = await api.post("/ingest", {
+  video_a: {
+    url: urlA,
+    transcript: transcriptA,
+    metadata: metadataA,
+  },
+  video_b: {
+    url: urlB,
+    transcript: transcriptB,
+    metadata: metadataB,
+  },
+});
   }
 
   return (

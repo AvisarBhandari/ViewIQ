@@ -6,14 +6,21 @@ from services.embedding_service import generate_embeddings
 from services.vectorstore_service import store_chunks
 
 
-def ingest_video(url: str, video_id: str):
-    metadata = get_metadata(url)
-    raw_transcript = get_transcript(url)
-    if not raw_transcript:
-        raw_transcript = get_transcript_ytdlp(url)
+def ingest_video(url: str, video_id: str, transcript=None, metadata=None):
+    if metadata is None and transcript is None:
+        metadata = get_metadata(url)
+        raw_transcript = get_transcript(url)
         if not raw_transcript:
-            raise ValueError("Could not retrieve transcript from YouTube.")
-    transcript = clean_transcript(raw_transcript)
+            raw_transcript = get_transcript_ytdlp(url)
+            if not raw_transcript:
+                raise ValueError("Could not retrieve transcript from YouTube.")
+    elif transcript is None:
+        transcript = get_transcript(url)
+        if not transcript:
+            transcript = get_transcript_ytdlp(url)
+            if not transcript:
+                raise ValueError("Could not retrieve transcript from YouTube.")
+    transcript = clean_transcript(transcript)
     chunks = chunk_text(transcript)
 
     # Returns list[list[float]] directly — no .tolist() needed

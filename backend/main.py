@@ -25,9 +25,15 @@ app.add_middleware(
 )
 
 
+class VideoPayload(BaseModel):
+    url: str
+    transcript: str
+    metadata: dict
+
+
 class IngestRequest(BaseModel):
-    url_a: str
-    url_b: str
+    video_a: VideoPayload
+    video_b: VideoPayload
 
 
 class ChatRequest(BaseModel):
@@ -53,14 +59,22 @@ def ingest_one(req: IngestOneRequest):
 
 @app.post("/ingest")
 def ingest(req: IngestRequest):
-    # Clear existing collection so re-ingests don't duplicate
-    collection.delete(where={"video_id": {"$in": ["A", "B"]}})
-    try:
-        data_a = ingest_video(req.url_a, video_id="A")
-        data_b = ingest_video(req.url_b, video_id="B")
 
-    except ValueError as e:
-        return {"status": "error", "message": str(e)}
+    collection.delete(where={"video_id": {"$in": ["A", "B"]}})
+
+    data_a = ingest_video(
+        url=req.video_a.url,
+        video_id="A",
+        transcript=req.video_a.transcript,
+        metadata=req.video_a.metadata,
+    )
+
+    data_b = ingest_video(
+        url=req.video_b.url,
+        video_id="B",
+        transcript=req.video_b.transcript,
+        metadata=req.video_b.metadata,
+    )
 
     return {
         "status": "success",
