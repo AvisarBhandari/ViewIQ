@@ -50,7 +50,7 @@ def _embed(inputs: list) -> list[list[float]]:
 def generate_embeddings(chunks: list[str]) -> list[list[float]]:
     all_embeddings = []
     for i in range(0, len(chunks), BATCH_SIZE):
-        batch = chunks[i : i + BATCH_SIZE]
+        batch = chunks[i:i + BATCH_SIZE]
         inputs = [{"content": [{"type": "text", "text": chunk}]} for chunk in batch]
         all_embeddings.extend(_embed(inputs))
     return all_embeddings
