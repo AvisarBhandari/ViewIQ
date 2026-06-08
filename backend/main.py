@@ -55,9 +55,12 @@ def ingest_one(req: IngestOneRequest):
 def ingest(req: IngestRequest):
     # Clear existing collection so re-ingests don't duplicate
     collection.delete(where={"video_id": {"$in": ["A", "B"]}})
+    try:
+        data_a = ingest_video(req.url_a, video_id="A")
+        data_b = ingest_video(req.url_b, video_id="B")
 
-    data_a = ingest_video(req.url_a, video_id="A")
-    data_b = ingest_video(req.url_b, video_id="B")
+    except ValueError as e:
+        return {"status": "error", "message": str(e)}
 
     return {
         "status": "success",

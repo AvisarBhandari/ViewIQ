@@ -5,6 +5,8 @@ collection = client.get_or_create_collection(name="videos")
 
 
 def store_chunks(chunk_objects):
+    if len(chunk_objects) == 0:
+        raise ValueError("Attempted to store empty chunk list")
     collection.add(
         documents=[c["text"] for c in chunk_objects],
         metadatas=[

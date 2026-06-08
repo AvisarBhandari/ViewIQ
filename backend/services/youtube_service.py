@@ -1,3 +1,6 @@
+import json
+import tempfile
+import yt_dlp
 import re
 import xml.etree.ElementTree as ET
 from youtube_transcript_api import (
@@ -64,4 +67,29 @@ def get_transcript(url: str):
             return None
 
         print("Unexpected transcript error:", str(e))
+        return None
+
+
+def get_transcript_ytdlp(url: str):
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_opts = {
+                "writesubtitles": True,
+                "writeautomaticsub": True,
+                "skip_download": True,
+                "subtitleslangs": ["en"],
+                "outtmpl": f"{tmpdir}/%(id)s.%(ext)s",
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+
+            subtitles = info.get("automatic_captions", {}) or info.get("subtitles", {})
+
+            if not subtitles:
+                return None
+
+            return subtitles
+
+    except Exception:
         return None
