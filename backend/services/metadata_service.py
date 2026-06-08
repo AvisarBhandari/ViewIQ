@@ -19,7 +19,7 @@ def get_video_id(url: str) -> str:
 
 def get_metadata(url: str) -> dict:
     video_id = get_video_id(url)
-
+    
     # Fetch snippet (title, creator) + statistics (views, likes, comments)
     response = requests.get(
         "https://www.googleapis.com/youtube/v3/videos",
