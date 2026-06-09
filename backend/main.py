@@ -12,8 +12,7 @@ import json
 
 app = FastAPI()
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
-# Debugging: Check your terminal logs when the server starts!
+# Debugging
 print(f"--- DEBUG: CORS allowed origin is set to: '{frontend_url}' ---")
 
 app.add_middleware(

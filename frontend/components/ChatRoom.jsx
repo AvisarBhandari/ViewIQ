@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL";
+
 const SUGGESTIONS = [
   "Why did Video A get more engagement?",
   "Compare the hooks in the first 5 seconds",
@@ -14,7 +16,8 @@ export default function ChatRoom({ session }) {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Both videos are loaded. Ask me anything — engagement, hooks, creator info, or improvement ideas.",
+      content:
+        "Both videos are loaded. Ask me anything — engagement, hooks, creator info, or improvement ideas.",
       sources: [],
     },
   ]);
@@ -23,7 +26,7 @@ export default function ChatRoom({ session }) {
   const [showSuggestions, setShowSuggestions] = useState(true);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
-  const abortRef = useRef(null); // AbortController ref for stop
+  const abortRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,32 +62,23 @@ export default function ChatRoom({ session }) {
     setQuestion("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    // Build history from current messages for memory
     const history = messages
       .filter((m) => m.content)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: q, sources: [] },
-    ]);
-
+    setMessages((prev) => [...prev, { role: "user", content: q, sources: [] }]);
     setStreaming(true);
 
-    // Create abort controller for stop button
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Add placeholder assistant message — NOT shown until first token arrives
-    // We use a flag in state instead of an empty string to avoid double indicator
-    const assistantIndex = messages.length + 1; // user msg + existing
     setMessages((prev) => [
       ...prev,
-      { role: "assistant", content: null, sources: [] }, // null = still waiting
+      { role: "assistant", content: null, sources: [] },
     ]);
 
     try {
-      const res = await fetch("http://localhost:8000/chat", {
+      const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q, history }),
@@ -101,7 +95,7 @@ export default function ChatRoom({ session }) {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // keep incomplete line
+        buffer = lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -126,7 +120,6 @@ export default function ChatRoom({ session }) {
                 const last = updated[updated.length - 1];
                 updated[updated.length - 1] = {
                   ...last,
-                  // null → "" on first token, then append
                   content: (last.content ?? "") + data.token,
                 };
                 return updated;
@@ -157,15 +150,11 @@ export default function ChatRoom({ session }) {
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        // User stopped — mark message as truncated
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last.content === null) {
-            updated[updated.length - 1] = {
-              ...last,
-              content: "_Stopped._",
-            };
+            updated[updated.length - 1] = { ...last, content: "_Stopped._" };
           }
           return updated;
         });
@@ -215,23 +204,31 @@ export default function ChatRoom({ session }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
         {messages.map((msg, i) => (
           <div key={i}>
-            <div className={`flex gap-2.5 items-end ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-              {/* Avatar */}
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs border
-                ${msg.role === "user"
-                  ? "bg-blue-50 dark:bg-blue-950 border-transparent text-blue-500"
-                  : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500"
-                }`}>
+            <div
+              className={`flex gap-2.5 items-end ${
+                msg.role === "user" ? "flex-row-reverse" : ""
+              }`}
+            >
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs border
+                ${
+                  msg.role === "user"
+                    ? "bg-blue-50 dark:bg-blue-950 border-transparent text-blue-500"
+                    : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500"
+                }`}
+              >
                 {msg.role === "user" ? "U" : "✦"}
               </div>
 
-              {/* Bubble — only render if content is not null */}
               {msg.content !== null && (
-                <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed
-                  ${msg.role === "user"
-                    ? "bg-blue-50 dark:bg-blue-950 text-blue-900 dark:text-blue-100 rounded-br-sm"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-bl-sm"
-                  }`}>
+                <div
+                  className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed
+                  ${
+                    msg.role === "user"
+                      ? "bg-blue-50 dark:bg-blue-950 text-blue-900 dark:text-blue-100 rounded-br-sm"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-bl-sm"
+                  }`}
+                >
                   {msg.role === "assistant" ? (
                     <MarkdownMessage content={msg.content} />
                   ) : (
@@ -244,7 +241,6 @@ export default function ChatRoom({ session }) {
               )}
             </div>
 
-            {/* Sources */}
             {msg.sources?.length > 0 && (
               <div className="flex gap-1.5 flex-wrap mt-2 ml-9">
                 {msg.sources.map((s, j) => (
@@ -260,7 +256,6 @@ export default function ChatRoom({ session }) {
           </div>
         ))}
 
-        {/* Typing indicator — only while waiting for first token */}
         {isWaiting && (
           <div className="flex gap-2.5 items-end">
             <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-xs text-zinc-500 flex-shrink-0">
@@ -287,7 +282,10 @@ export default function ChatRoom({ session }) {
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
-              onClick={() => { setQuestion(s); textareaRef.current?.focus(); }}
+              onClick={() => {
+                setQuestion(s);
+                textareaRef.current?.focus();
+              }}
               className="text-xs px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
             >
               {s}
@@ -301,7 +299,10 @@ export default function ChatRoom({ session }) {
         <textarea
           ref={textareaRef}
           value={question}
-          onChange={(e) => { setQuestion(e.target.value); autoResize(); }}
+          onChange={(e) => {
+            setQuestion(e.target.value);
+            autoResize();
+          }}
           onKeyDown={handleKey}
           placeholder="Compare hooks, ask about engagement, request improvements…"
           rows={1}
@@ -313,7 +314,13 @@ export default function ChatRoom({ session }) {
           className="w-9 h-9 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center flex-shrink-0 hover:opacity-80 active:scale-95 transition disabled:opacity-30"
           aria-label="Send"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>
@@ -322,7 +329,6 @@ export default function ChatRoom({ session }) {
   );
 }
 
-// Markdown renderer with table support
 function MarkdownMessage({ content }) {
   return (
     <ReactMarkdown
@@ -334,30 +340,56 @@ function MarkdownMessage({ content }) {
           </div>
         ),
         thead: ({ node, ...props }) => (
-          <thead className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200" {...props} />
+          <thead
+            className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
+            {...props}
+          />
         ),
         th: ({ node, ...props }) => (
-          <th className="px-3 py-2 text-left font-medium border-b border-zinc-300 dark:border-zinc-600 whitespace-nowrap" {...props} />
+          <th
+            className="px-3 py-2 text-left font-medium border-b border-zinc-300 dark:border-zinc-600 whitespace-nowrap"
+            {...props}
+          />
         ),
         td: ({ node, ...props }) => (
-          <td className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 align-top leading-relaxed" {...props} />
+          <td
+            className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 align-top leading-relaxed"
+            {...props}
+          />
         ),
         tr: ({ node, ...props }) => (
           <tr className="even:bg-zinc-50 dark:even:bg-zinc-800/50" {...props} />
         ),
         p: ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
-        strong: ({ node, ...props }) => <strong className="font-medium" {...props} />,
-        em: ({ node, ...props }) => <em className="italic text-zinc-500 dark:text-zinc-400" {...props} />,
+        strong: ({ node, ...props }) => (
+          <strong className="font-medium" {...props} />
+        ),
+        em: ({ node, ...props }) => (
+          <em
+            className="italic text-zinc-500 dark:text-zinc-400"
+            {...props}
+          />
+        ),
         code: ({ node, inline, ...props }) =>
           inline ? (
-            <code className="bg-zinc-200 dark:bg-zinc-700 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />
+            <code
+              className="bg-zinc-200 dark:bg-zinc-700 px-1 py-0.5 rounded text-[11px] font-mono"
+              {...props}
+            />
           ) : (
             <pre className="bg-zinc-200 dark:bg-zinc-700 p-3 rounded-lg text-[11px] font-mono overflow-x-auto my-2">
               <code {...props} />
             </pre>
           ),
-        ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-0.5 my-1" {...props} />,
-        ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-0.5 my-1" {...props} />,
+        ul: ({ node, ...props }) => (
+          <ul className="list-disc list-inside space-y-0.5 my-1" {...props} />
+        ),
+        ol: ({ node, ...props }) => (
+          <ol
+            className="list-decimal list-inside space-y-0.5 my-1"
+            {...props}
+          />
+        ),
       }}
     >
       {content}

@@ -1,25 +1,24 @@
 from services.metadata_service import get_metadata
-from services.youtube_service import get_transcript, get_transcript_ytdlp
+from services.youtube_service import get_transcript
 from services.preprocessing_service import clean_transcript
 from services.chunking_service import chunk_text
 from services.embedding_service import generate_embeddings
 from services.vectorstore_service import store_chunks
 
 
-def ingest_video(
-    url: str,
-    video_id: str,
-):
+def ingest_video(url: str, video_id: str):
     metadata = get_metadata(url)
+
     raw_transcript = get_transcript(url)
     if not raw_transcript:
-        raw_transcript = get_transcript_ytdlp(url)
-        if not raw_transcript:
-            raise ValueError("Could not retrieve transcript from YouTube.")
+        raise ValueError(
+            "Could not retrieve transcript from YouTube. "
+            "The video may have transcripts disabled, or YouTube is blocking "
+            "the server IP. Try a different video or enable captions."
+        )
+
     transcript = clean_transcript(raw_transcript)
     chunks = chunk_text(transcript)
-
-    # Returns list[list[float]] directly — no .tolist() needed
     embeddings = generate_embeddings(chunks)
 
     views = metadata.get("views", 0) or 0
@@ -43,8 +42,10 @@ def ingest_video(
                 "chunk_index": i,
             }
         )
+
     if not chunk_objects:
         raise ValueError(f"No chunks generated for video {video_id}")
+
     store_chunks(chunk_objects)
 
     return {
