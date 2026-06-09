@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const SUGGESTIONS = [
   "Why did Video A get more engagement?",
