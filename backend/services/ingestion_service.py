@@ -13,35 +13,36 @@ def ingest_video(url: str, video_id: str):
     if not raw_transcript:
         raise ValueError(
             "Could not retrieve transcript from YouTube. "
-            "The video may have transcripts disabled, or YouTube is blocking "
-            "the server IP. Try a different video or enable captions."
+            "The video may have transcripts disabled, or the server IP is blocked."
         )
 
     transcript = clean_transcript(raw_transcript)
     chunks = chunk_text(transcript)
     embeddings = generate_embeddings(chunks)
 
-    views = metadata.get("views", 0) or 0
-    likes = metadata.get("likes", 0) or 0
+    views    = metadata.get("views", 0) or 0
+    likes    = metadata.get("likes", 0) or 0
     comments = metadata.get("comments", 0) or 0
     engagement_rate = round(((likes + comments) / views * 100), 2) if views else 0
 
     chunk_objects = []
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-        chunk_objects.append(
-            {
-                "text": chunk,
-                "embedding": embedding,
-                "video_id": video_id,
-                "video_title": metadata["title"],
-                "creator": metadata["creator"],
-                "views": views,
-                "likes": likes,
-                "comments": comments,
-                "source_url": url,
-                "chunk_index": i,
-            }
-        )
+        chunk_objects.append({
+            "text":             chunk,
+            "embedding":        embedding,
+            "video_id":         video_id,
+            "video_title":      metadata["title"],
+            "creator":          metadata["creator"],
+            "views":            views,
+            "likes":            likes,
+            "comments":         comments,
+            "engagement_rate":  engagement_rate,
+            "duration":         metadata.get("duration", 0),
+            "upload_date":      metadata.get("upload_date", ""),
+            "follower_count":   metadata.get("follower_count") or 0,
+            "source_url":       url,
+            "chunk_index":      i,
+        })
 
     if not chunk_objects:
         raise ValueError(f"No chunks generated for video {video_id}")

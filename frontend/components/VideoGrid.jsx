@@ -2,7 +2,8 @@
 import { useState } from "react";
 import api from "@/lib/api";
 
-const LABELS = ["A", "B", "C", "D", "E"];
+const LABELS = ["A", "B", "C", "D"];
+const MAX_VIDEOS = 4;
 
 function getYouTubeId(url) {
   if (!url) return null;
@@ -19,8 +20,8 @@ function engagementRate(meta) {
   if (meta?.engagement_rate != null && !isNaN(Number(meta.engagement_rate))) {
     return Number(meta.engagement_rate).toFixed(2) + "%";
   }
-  const views = Number(meta?.views) || 0;
-  const likes = Number(meta?.likes) || 0;
+  const views    = Number(meta?.views)    || 0;
+  const likes    = Number(meta?.likes)    || 0;
   const comments = Number(meta?.comments) || 0;
   if (!views) return "—";
   return ((likes + comments) / views * 100).toFixed(2) + "%";
@@ -30,7 +31,7 @@ function fmtNum(n) {
   const num = Number(n);
   if (!num || isNaN(num)) return "—";
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
+  if (num >= 1_000)     return (num / 1_000).toFixed(1) + "K";
   return String(num);
 }
 
@@ -52,24 +53,25 @@ function VideoCard({ label, data, onRemove }) {
     );
   }
 
-  const meta = data.metadata;
+  const meta     = data.metadata;
   const sourceUrl = meta.source_url || meta.source || "";
-  const ytId = getYouTubeId(sourceUrl);
+  const ytId      = getYouTubeId(sourceUrl);
+  const durMin    = meta.duration ? `${Math.floor(meta.duration / 60)}m` : null;
 
   return (
     <div className="border-b border-zinc-200 dark:border-zinc-800">
       <div className="p-4">
+        {/* Header row */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">{label}</span>
           <button
             onClick={onRemove}
             className="text-xs text-zinc-400 hover:text-red-500 transition"
             aria-label="Remove video"
-          >
-            ✕
-          </button>
+          >✕</button>
         </div>
 
+        {/* Thumbnail */}
         <div className="w-full aspect-video bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 mb-3 relative">
           {ytId ? (
             expanded ? (
@@ -80,10 +82,7 @@ function VideoCard({ label, data, onRemove }) {
                 allowFullScreen
               />
             ) : (
-              <button
-                onClick={() => setExpanded(true)}
-                className="w-full h-full flex items-center justify-center group relative"
-              >
+              <button onClick={() => setExpanded(true)} className="w-full h-full flex items-center justify-center group relative">
                 <img
                   src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
                   alt={meta.title || "thumbnail"}
@@ -105,14 +104,15 @@ function VideoCard({ label, data, onRemove }) {
           )}
         </div>
 
+        {/* Title + creator */}
         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 line-clamp-2 mb-1">
           {meta.title || "Untitled"}
         </p>
         <p className="text-xs text-zinc-500 mb-3">
-          {[meta.creator, meta.duration ? `${Math.floor(meta.duration / 60)}m` : null]
-            .filter(Boolean).join(" · ") || "—"}
+          {[meta.creator, durMin].filter(Boolean).join(" · ") || "—"}
         </p>
 
+        {/* Stats grid */}
         <div className="grid grid-cols-3 gap-1.5">
           {[
             { label: "Views",     value: fmtNum(meta.views) },
@@ -121,9 +121,7 @@ function VideoCard({ label, data, onRemove }) {
           ].map((s) => (
             <div key={s.label} className="bg-zinc-50 dark:bg-zinc-800 rounded-md p-2">
               <div className="text-[10px] text-zinc-400">{s.label}</div>
-              <div className={`text-sm font-medium ${
-                s.highlight ? "text-green-600 dark:text-green-400" : "text-zinc-900 dark:text-zinc-100"
-              }`}>
+              <div className={`text-sm font-medium ${s.highlight ? "text-green-600 dark:text-green-400" : "text-zinc-900 dark:text-zinc-100"}`}>
                 {s.value}
               </div>
             </div>
@@ -135,62 +133,98 @@ function VideoCard({ label, data, onRemove }) {
 }
 
 export default function VideoGrid({ videos, onAddVideo, onRemoveVideo }) {
-  // Defensive: always treat as array even if parent passes something wrong
   const safeVideos = Array.isArray(videos) ? videos : [];
-
   const [urlInput, setUrlInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+
+  const atLimit = safeVideos.length >= MAX_VIDEOS;
 
   async function handleAdd(e) {
     e.preventDefault();
-    if (!urlInput.trim()) return;
+    if (!urlInput.trim() || atLimit) return;
     setLoading(true);
     setError(null);
+
+    // Next label is based on current count
+    const nextLabel = LABELS[safeVideos.length];
+
     try {
-      const nextLabel = LABELS[safeVideos.length] ?? String(safeVideos.length + 1);
       const res = await api.post("/ingest-one", {
-        url: urlInput,
-        video_id: nextLabel,
+        url:      urlInput,
+        video_id: nextLabel,   // always A/B/C/D — matches what backend stores
       });
+
+      if (res.data.status === "error") {
+        setError(res.data.message || "Failed to add video.");
+        return;
+      }
+
       onAddVideo(res.data.data);
       setUrlInput("");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to add video.");
+      setError(err.response?.data?.detail || err.response?.data?.message || "Failed to add video.");
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleRemove(index) {
+    const video = safeVideos[index];
+    const videoId = video?.video_id || LABELS[index];
+    // Tell backend to drop this video's chunks
+    try {
+      await api.delete(`/remove/${videoId}`);
+    } catch {
+      // best-effort
+    }
+    onRemoveVideo(index);
+  }
+
   return (
     <div className="flex flex-col h-full">
+      {/* Add video form */}
       <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">Videos</h2>
+        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
+          Videos
+          <span className="ml-1.5 text-xs font-normal text-zinc-400">
+            {safeVideos.length}/{MAX_VIDEOS}
+          </span>
+        </h2>
+
         <form onSubmit={handleAdd} className="flex gap-2">
           <input
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="Add YouTube URL…"
-            className="flex-1 min-w-0 text-xs border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition"
+            placeholder={atLimit ? "Limit reached" : "Add YouTube URL…"}
+            disabled={atLimit}
+            className="flex-1 min-w-0 text-xs border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition disabled:opacity-40"
           />
           <button
             type="submit"
-            disabled={loading || !urlInput.trim() || safeVideos.length >= 5}
+            disabled={loading || !urlInput.trim() || atLimit}
             className="text-xs px-3 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 disabled:opacity-40 transition hover:opacity-90 whitespace-nowrap"
           >
             {loading ? "…" : "Add"}
           </button>
         </form>
+
+        {atLimit && (
+          <p className="text-[11px] text-zinc-400 mt-1.5">
+            Remove a video to add another.
+          </p>
+        )}
         {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
       </div>
 
+      {/* Video cards */}
       <div className="overflow-y-auto flex-1">
         {safeVideos.map((v, i) => (
           <VideoCard
-            key={i}
+            key={`${LABELS[i]}-${i}`}
             label={LABELS[i] ?? String(i + 1)}
             data={v}
-            onRemove={() => onRemoveVideo(i)}
+            onRemove={() => handleRemove(i)}
           />
         ))}
         {safeVideos.length === 0 && (
