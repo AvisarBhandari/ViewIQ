@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const SUGGESTIONS = [
-  "Summarise this video",
+  "Summarize this video",
   "What's the engagement rate?",
   "Compare the hooks in the first 5 seconds",
   "Which video performed better and why?",
