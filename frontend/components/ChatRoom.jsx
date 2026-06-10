@@ -3,8 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 const SUGGESTIONS = [
   "Summarise this video",
   "What's the engagement rate?",
@@ -23,12 +21,12 @@ export default function ChatRoom({ session, videoIds = [] }) {
       sources: [],
     },
   ]);
-  const [question, setQuestion]       = useState("");
-  const [streaming, setStreaming]     = useState(false);
+  const [question, setQuestion]             = useState("");
+  const [streaming, setStreaming]           = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const bottomRef  = useRef(null);
+  const bottomRef   = useRef(null);
   const textareaRef = useRef(null);
-  const abortRef   = useRef(null);
+  const abortRef    = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,21 +67,19 @@ export default function ChatRoom({ session, videoIds = [] }) {
     setMessages((prev) => [...prev, { role: "user", content: q, sources: [] }]);
     setStreaming(true);
 
-    const controller = new AbortController();
-    abortRef.current = controller;
+    const controller  = new AbortController();
+    abortRef.current  = controller;
 
-    // Placeholder assistant message while waiting
     setMessages((prev) => [...prev, { role: "assistant", content: null, sources: [] }]);
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
+      // ✅ Hits the Next.js API route (/api/chat), NOT the backend directly.
+      // The route streams the response through with X-Accel-Buffering: no,
+      // which prevents Vercel from buffering the whole response before delivery.
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question,
-          history,
-          video_ids: videoIds,   // ✅ tells backend which videos to retrieve from
-        }),
+        body: JSON.stringify({ question: q, history, video_ids: videoIds }),
         signal: controller.signal,
       });
 
@@ -97,7 +93,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop();
+        buffer = lines.pop(); // keep incomplete line
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -155,9 +151,8 @@ export default function ChatRoom({ session, videoIds = [] }) {
         setMessages((prev) => {
           const updated = [...prev];
           const last    = updated[updated.length - 1];
-          if (last.content === null) {
+          if (last.content === null)
             updated[updated.length - 1] = { ...last, content: "_Stopped._" };
-          }
           return updated;
         });
       } else {
@@ -182,10 +177,11 @@ export default function ChatRoom({ session, videoIds = [] }) {
   const isWaiting =
     streaming && messages[messages.length - 1]?.content === null;
 
-  // Filter suggestions to single-video mode
   const suggestions =
     videoIds.length === 1
-      ? SUGGESTIONS.filter((s) => !s.toLowerCase().includes("compare") && !s.toLowerCase().includes("which video"))
+      ? SUGGESTIONS.filter(
+          (s) => !s.toLowerCase().includes("compare") && !s.toLowerCase().includes("which video")
+        )
       : SUGGESTIONS;
 
   return (
@@ -319,9 +315,9 @@ function MarkdownMessage({ content }) {
         th:    ({ node, ...props }) => <th className="px-3 py-2 text-left font-medium border-b border-zinc-300 dark:border-zinc-600 whitespace-nowrap" {...props} />,
         td:    ({ node, ...props }) => <td className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 align-top leading-relaxed" {...props} />,
         tr:    ({ node, ...props }) => <tr className="even:bg-zinc-50 dark:even:bg-zinc-800/50" {...props} />,
-        p:      ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
-        strong: ({ node, ...props }) => <strong className="font-medium" {...props} />,
-        em:     ({ node, ...props }) => <em className="italic text-zinc-500 dark:text-zinc-400" {...props} />,
+        p:     ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
+        strong:({ node, ...props }) => <strong className="font-medium" {...props} />,
+        em:    ({ node, ...props }) => <em className="italic text-zinc-500 dark:text-zinc-400" {...props} />,
         code: ({ node, inline, ...props }) =>
           inline
             ? <code className="bg-zinc-200 dark:bg-zinc-700 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />
