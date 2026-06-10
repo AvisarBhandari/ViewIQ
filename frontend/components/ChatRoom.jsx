@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -10,6 +10,10 @@ const SUGGESTIONS = [
   "Which video performed better and why?",
 ];
 
+// How fast to type characters when the full response arrives at once (ms per char).
+// Real streaming (localhost) bypasses this entirely — tokens render immediately.
+const TYPING_SPEED_MS = 8;
+
 export default function ChatRoom({ session, videoIds = [] }) {
   const [messages, setMessages] = useState([
     {
@@ -19,18 +23,57 @@ export default function ChatRoom({ session, videoIds = [] }) {
           ? "Video loaded. Ask me anything about it — content, engagement, or improvement ideas."
           : "Videos loaded. Ask me anything — engagement, hooks, creator info, or comparisons.",
       sources: [],
+      displayed: null, // null = fully shown (use content directly)
     },
   ]);
-  const [question, setQuestion]             = useState("");
-  const [streaming, setStreaming]           = useState(false);
+  const [question, setQuestion]               = useState("");
+  const [streaming, setStreaming]             = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const bottomRef   = useRef(null);
-  const textareaRef = useRef(null);
-  const abortRef    = useRef(null);
+  const bottomRef    = useRef(null);
+  const textareaRef  = useRef(null);
+  const abortRef     = useRef(null);
+  // Tracks running typing animations so they can be cancelled on Stop
+  const typingTimers = useRef([]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Cancel all pending typing timers (used by Stop button)
+  function cancelTyping() {
+    typingTimers.current.forEach(clearTimeout);
+    typingTimers.current = [];
+  }
+
+  // Animate `fullText` into the last assistant message character by character.
+  // Called only when the entire response arrives in one chunk (Vercel buffered).
+  const animateTyping = useCallback((fullText) => {
+    cancelTyping();
+    let i = 0;
+    function step() {
+      if (i > fullText.length) {
+        // Animation done — collapse displayed back to null so content is used directly
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          updated[updated.length - 1] = { ...last, displayed: null };
+          return updated;
+        });
+        return;
+      }
+      const slice = fullText.slice(0, i);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        updated[updated.length - 1] = { ...last, displayed: slice };
+        return updated;
+      });
+      i++;
+      const timer = setTimeout(step, TYPING_SPEED_MS);
+      typingTimers.current.push(timer);
+    }
+    step();
+  }, []);
 
   function autoResize() {
     const el = textareaRef.current;
@@ -49,6 +92,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
   function stopStreaming() {
     abortRef.current?.abort();
     abortRef.current = null;
+    cancelTyping();
     setStreaming(false);
   }
 
@@ -64,17 +108,15 @@ export default function ChatRoom({ session, videoIds = [] }) {
       .filter((m) => m.content)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    setMessages((prev) => [...prev, { role: "user", content: q, sources: [] }]);
+    setMessages((prev) => [...prev, { role: "user", content: q, sources: [], displayed: null }]);
     setStreaming(true);
 
-    const controller  = new AbortController();
-    abortRef.current  = controller;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    setMessages((prev) => [...prev, { role: "assistant", content: null, sources: [] }]);
+    setMessages((prev) => [...prev, { role: "assistant", content: null, sources: [], displayed: null }]);
 
     try {
-      // Hits the Next.js API route (/api/chat), NOT the backend directly.
-      // which prevents Vercel from buffering the whole response before delivery.
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,6 +127,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let tokenCount = 0; // counts how many separate token chunks arrived
 
       while (true) {
         const { value, done } = await reader.read();
@@ -92,7 +135,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // keep incomplete line
+        buffer = lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -112,9 +155,11 @@ export default function ChatRoom({ session, videoIds = [] }) {
             }
 
             if (data.type === "token" && data.token) {
+              tokenCount++;
+              // Append to content immediately (real streaming path)
               setMessages((prev) => {
                 const updated = [...prev];
-                const last    = updated[updated.length - 1];
+                const last = updated[updated.length - 1];
                 updated[updated.length - 1] = {
                   ...last,
                   content: (last.content ?? "") + data.token,
@@ -133,9 +178,10 @@ export default function ChatRoom({ session, videoIds = [] }) {
         try {
           const data = JSON.parse(buffer.trim());
           if (data.type === "token" && data.token) {
+            tokenCount++;
             setMessages((prev) => {
               const updated = [...prev];
-              const last    = updated[updated.length - 1];
+              const last = updated[updated.length - 1];
               updated[updated.length - 1] = {
                 ...last,
                 content: (last.content ?? "") + data.token,
@@ -145,13 +191,26 @@ export default function ChatRoom({ session, videoIds = [] }) {
           }
         } catch {}
       }
+
+      // If the whole response arrived in ≤3 token events it was buffered (Vercel).
+      // Animate it so it feels like typing instead of a sudden drop.
+      if (tokenCount <= 3) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.content) animateTyping(last.content);
+          return prev;
+        });
+      }
+
     } catch (err) {
       if (err.name === "AbortError") {
+        cancelTyping();
         setMessages((prev) => {
           const updated = [...prev];
-          const last    = updated[updated.length - 1];
-          if (last.content === null)
-            updated[updated.length - 1] = { ...last, content: "_Stopped._" };
+          const last = updated[updated.length - 1];
+          // Freeze whatever was displayed at the time stop was pressed
+          const frozen = last.displayed ?? last.content ?? "_Stopped._";
+          updated[updated.length - 1] = { ...last, content: frozen, displayed: null };
           return updated;
         });
       } else {
@@ -161,6 +220,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
             role: "assistant",
             content: "Something went wrong. Please try again.",
             sources: [],
+            displayed: null,
           };
           return updated;
         });
@@ -171,8 +231,20 @@ export default function ChatRoom({ session, videoIds = [] }) {
     }
   }
 
-  const isLastStreaming = (i) =>
-    streaming && i === messages.length - 1 && messages[i].role === "assistant";
+  // What to actually render for a message:
+  // - `displayed` is set during the typing animation (partial text)
+  // - `content` is the full text (used directly for real streaming or after animation)
+  function visibleContent(msg) {
+    return msg.displayed !== null && msg.displayed !== undefined
+      ? msg.displayed
+      : msg.content;
+  }
+
+  const isLastActive = (i) =>
+    (streaming || typingTimers.current.length > 0) &&
+    i === messages.length - 1 &&
+    messages[i].role === "assistant";
+
   const isWaiting =
     streaming && messages[messages.length - 1]?.content === null;
 
@@ -218,15 +290,15 @@ export default function ChatRoom({ session, videoIds = [] }) {
                 {msg.role === "user" ? "U" : "✦"}
               </div>
 
-              {msg.content !== null && (
+              {visibleContent(msg) !== null && (
                 <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed
                   ${msg.role === "user"
                     ? "bg-blue-50 dark:bg-blue-950 text-blue-900 dark:text-blue-100 rounded-br-sm"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-bl-sm"}`}>
                   {msg.role === "assistant"
-                    ? <MarkdownMessage content={msg.content} />
-                    : msg.content}
-                  {isLastStreaming(i) && (
+                    ? <MarkdownMessage content={visibleContent(msg)} />
+                    : visibleContent(msg)}
+                  {isLastActive(i) && (
                     <span className="inline-block w-0.5 h-3.5 bg-zinc-400 ml-0.5 animate-pulse align-middle" />
                   )}
                 </div>
