@@ -73,8 +73,7 @@ export default function ChatRoom({ session, videoIds = [] }) {
     setMessages((prev) => [...prev, { role: "assistant", content: null, sources: [] }]);
 
     try {
-      // ✅ Hits the Next.js API route (/api/chat), NOT the backend directly.
-      // The route streams the response through with X-Accel-Buffering: no,
+      // Hits the Next.js API route (/api/chat), NOT the backend directly.
       // which prevents Vercel from buffering the whole response before delivery.
       const res = await fetch("/api/chat", {
         method: "POST",
