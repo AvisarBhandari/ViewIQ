@@ -2,7 +2,7 @@
 
 > Paste one YouTube URL or up to four and chat with an AI that has read every word of the transcripts and knows the real engagement numbers.
 
-**Live:** [https://rag-chatbot-j3lezxxwp-me-s-projectss.vercel.app](https://rag-chatbot-six-zeta.vercel.app/)
+**Live:** [Live Demo](https://rag-chatbot-six-zeta.vercel.app/)
 
 ---
 
